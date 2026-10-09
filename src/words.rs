@@ -102,6 +102,22 @@ pub enum InputError {
     NoMoreGuess,
 }
 
+impl std::fmt::Display for InputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str().to_owned())
+    }
+}
+
+impl InputError {
+    fn to_str(&self) -> String {
+        match self {
+            InputError::NotInList => "Input word is not in list".to_string(),
+            InputError::InvalidInput => "Invalid input".to_string(),
+            InputError::NoMoreGuess => "No more guesses allowed".to_string(),
+        }
+    }
+}
+
 pub struct Answer {
     word: String,
     tries: u8,

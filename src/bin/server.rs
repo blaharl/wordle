@@ -30,18 +30,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn handle_stream(mut socket: TcpStream, _addr: SocketAddr, words: Words) {
     let mut answer = words.generate_answer();
+    let user = format!(
+        "{}{:04}",
+        words.show(&answer).0,
+        rand::random_range(0..10000)
+    );
 
     loop {
         let mut buffer = vec![0; 1024];
         let n = socket.read(&mut buffer).await.unwrap();
         let guess = ClientMsg::from_slice(&buffer[..n]).guess();
 
-        if guess == "/abort" {
+        if guess == "/ABORT" {
             eprintln!("user aborted.");
-            return
+            return;
         }
 
-        eprintln!("guess: {}", guess);
+        eprintln!("{}: {}", user, guess);
 
         let guess_result = words.solve(&mut answer, &guess);
         let tries = words.show(&answer).1;
@@ -51,7 +56,14 @@ async fn handle_stream(mut socket: TcpStream, _addr: SocketAddr, words: Words) {
         let response = match guess_result {
             Ok((guess_state, colors)) => {
                 match guess_state {
-                    GuessState::Solved | GuessState::GameOver => exit = true,
+                    GuessState::Solved => {
+                        eprintln!("{}: Solved!", user);
+                        exit = true;
+                    },
+                    GuessState::GameOver => {
+                        eprintln!("{}: Game Over!", user);
+                        exit = true;
+                    }
                     _ => {}
                 };
                 ServerMsg::new(guess_state, tries, colors)

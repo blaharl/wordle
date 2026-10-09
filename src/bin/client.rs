@@ -11,12 +11,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut buffer = vec![0; 1024];
         let mut guess = String::new();
         std::io::stdin().read_line(&mut guess).ok();
-        guess = guess.trim().to_string();
+        guess = guess.trim().to_string().to_ascii_uppercase();
 
         let client_msg = ClientMsg::new(guess.clone());
         stream.write_all(client_msg.to_string().as_bytes())?;
 
-        if guess == "/abort" {
+        if guess == "/ABORT" {
             break;
         }
 
