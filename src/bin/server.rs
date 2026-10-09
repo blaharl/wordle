@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpSocket, TcpStream};
 use wordle::msg::{ClientMsg, ServerMsg};
@@ -12,7 +13,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     socket.bind(addr)?;
 
     let listener = socket.listen(1024)?;
-    let words = Words::new();
+    let words = Arc::new(Words::new());
 
     loop {
         match listener.accept().await {
@@ -24,11 +25,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
-
-    Ok(())
 }
 
-async fn handle_stream(mut socket: TcpStream, _addr: SocketAddr, words: Words) {
+async fn handle_stream(mut socket: TcpStream, _addr: SocketAddr, words: Arc<Words>) {
     let mut answer = words.generate_answer();
     let user = format!(
         "{}{:04}",
