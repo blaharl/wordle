@@ -1,9 +1,10 @@
+use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Margin, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, List, ListItem, Paragraph},
+    widgets::{Block, Paragraph},
 };
 
 use color_eyre::Result;
@@ -76,8 +77,10 @@ impl App {
     }
 
     fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        let mut vertical = ScrollbarState::new(100);
+        let scroll_max = terminal.get_frame().area().height - 6;
         loop {
-            terminal.draw(|frame| self.render(frame))?;
+            terminal.draw(|frame| self.render(frame, &mut vertical))?;
 
             if let Some(key) = event::read()?.as_key_press_event()
                 && key.kind == KeyEventKind::Press
@@ -105,17 +108,20 @@ impl App {
                         if exit {
                             break Ok(());
                         }
-                        self.receive_response()?
+                        self.receive_response()?;
+                        vertical = vertical.position( self.responses.len().saturating_sub(scroll_max as usize));
                     }
                     KeyCode::Char(to_insert) => self.enter_char(to_insert),
                     KeyCode::Backspace => self.delete_char(),
+                    KeyCode::Down => vertical.next(),
+                    KeyCode::Up => vertical.prev(),
                     _ => {}
                 }
             }
         }
     }
 
-    fn render(&self, frame: &mut Frame) {
+    fn render(&self, frame: &mut Frame, vertical: &mut ScrollbarState) {
         let layout = Layout::vertical([
             Constraint::Length(1),
             Constraint::Min(1),
@@ -133,26 +139,27 @@ impl App {
         );
         let text = Text::from(Line::from(msg)).patch_style(style);
         let help_message = Paragraph::new(text);
-        frame.render_widget(help_message, help_area);
+        frame.render_widget(help_message.centered(), help_area);
 
         let input = Paragraph::new(self.input.as_str())
             .style(Style::default().fg(Color::Yellow))
             .block(Block::bordered().title("Input"));
         frame.render_widget(input, input_area);
 
-        let responses: Vec<ListItem> = self
+        let responses: Vec<Line> = self
             .responses
             .iter()
             .zip(&self.guesses)
             .map(|(m, g)| color_guess(m, g))
             .collect();
-        let messages = List::new(responses).block(Block::bordered().title("Guessses"));
-        frame.render_widget(messages, messages_area);
+
+        render_content(frame, messages_area, vertical, responses);
+        render_vertical_scrollbar(frame, messages_area, vertical);
     }
 }
 
-fn color_guess<'a>(m: &ServerMsg, g: &'a String) -> ListItem<'a> {
-    let content = match m.guess_state() {
+fn color_guess<'a>(m: &ServerMsg, g: &'a String) -> Line<'a> {
+    match m.guess_state() {
         GuessState::Error(e) => Line::from(vec![Span::raw(format!("{e}"))]),
         _ => {
             let mut output = vec![];
@@ -175,9 +182,28 @@ fn color_guess<'a>(m: &ServerMsg, g: &'a String) -> ListItem<'a> {
             }
             Line::from(output)
         }
-    };
-    ListItem::new(content)
+    }
 }
 
-// TODO: scroll
 // TODO: result screen
+
+pub fn render_vertical_scrollbar(frame: &mut Frame, area: Rect, vertical: &mut ScrollbarState) {
+    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+    frame.render_stateful_widget(
+        scrollbar,
+        area.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
+        vertical,
+    );
+}
+
+fn render_content(frame: &mut Frame, area: Rect, vertical: &ScrollbarState, lines: Vec<Line>) {
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(Block::bordered().title("Guesses"))
+            .scroll((vertical.get_position() as u16, 0)),
+        area,
+    );
+}
